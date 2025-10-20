@@ -1,0 +1,23 @@
+{
+  "sinar mataram": {
+    "asset_name": "Sinar Mataram",
+    "lat": 2.19252,
+    "lon": 101.61298,
+    "rx_time": "2025-10-20T07:06:58Z",
+    "gps_valid": true
+  },
+  "sinar kuta starlink": {
+    "asset_name": "Sinar Kuta Starlink",
+    "lat": 1.85009,
+    "lon": 124.8783,
+    "rx_time": "2025-10-20T07:01:09Z",
+    "gps_valid": true
+  },
+  "amanah morowali": {
+    "asset_name": "Amanah Morowali",
+    "lat": 0.3445,
+    "lon": 127.93279,
+    "rx_time": "2025-10-20T07:21:31Z",
+    "gps_valid": true
+  }
+}
