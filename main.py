@@ -3,14 +3,17 @@
 
 """
 Datagate → NGP forwarder + OpenWeather enrichment
-- Caches last position per AssetDescription
-- Exposes /asset/{asset_name}/weather to return OpenWeather block + cached meta
-- Includes speed_calculation (kph) and heading_calculation (0–359°)
+- Match unit by AssetDescription → IMEI (mappings JSON)
+- Cache last position per asset (JSON)
+- /asset/{asset_name}/weather: balikin blok OpenWeather + meta terakhir
+- Speed dikonversi ke km/h sesuai SPEED_UNIT: "kmh" | "mph" | "knots"
+- Heading dipastikan 0–359°
 
-Admin token and OpenWeather API key are hardcoded for internal usage.
+CATATAN:
+- ADMIN_TOKEN & OPENWEATHER_API_KEY diset di bawah untuk keperluan internal.
 """
 
-from fastapi import FastAPI, Request, Response, HTTPException, Depends, Header, Path
+from fastapi import FastAPI, Request, Response, HTTPException, Depends, Header
 from pydantic import BaseModel
 import xml.etree.ElementTree as ET
 import requests, json, os, threading, logging, math
@@ -20,6 +23,10 @@ from datetime import datetime, timezone as tz
 # ================== CONFIG ==================
 NGP_URL = "http://ngp-tracker.eu.navixy.com:80"   # endpoint NGP
 TIMEOUT_S = 10
+
+# Sumber data speed dari payload (Telemetry/Speed) pakai unit apa?
+# Pilih: "kmh" | "mph" | "knots"
+SPEED_UNIT = "kmh"
 
 DATA_DIR = "data"
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -33,7 +40,7 @@ DEFAULT_MAPPINGS = {
 
 # ================== FIXED CREDENTIALS ==================
 OPENWEATHER_API_KEY = "f1c81dd3fc3e2d98c23a4b81b515604f"  # fixed key
-ADMIN_TOKEN = "secret123"  # fixed admin token
+ADMIN_TOKEN = "secret123"                                  # fixed admin token
 # ========================================================
 
 OPENWEATHER_BASE = "https://api.openweathermap.org/data/2.5/weather"
@@ -47,7 +54,7 @@ _lock = threading.Lock()
 NAME_TO_IMEI: Dict[str, str] = {}
 LAST_POS: Dict[str, Dict[str, Any]] = {}
 
-# ---------- Small utils ----------
+# ---------- Utils ----------
 def norm_name(s: Optional[str]) -> Optional[str]:
     return s.strip().casefold() if s else None
 
@@ -56,13 +63,21 @@ def to_float(txt: Optional[str]) -> Optional[float]:
         return None
     try:
         return float(txt)
-    except:
+    except Exception:
         return None
 
-def mph_to_kph(v: Optional[float]) -> Optional[int]:
+def convert_speed(v: Optional[float]) -> Optional[int]:
+    """Konversi ke km/h sesuai SPEED_UNIT."""
     if v is None:
         return None
-    return int(round(v * 1.609344))
+    if SPEED_UNIT == "kmh":
+        return int(round(v))
+    if SPEED_UNIT == "mph":
+        return int(round(v * 1.609344))
+    if SPEED_UNIT == "knots":
+        return int(round(v * 1.852))
+    # fallback
+    return int(round(v))
 
 def strip_ns(root: ET.Element) -> ET.Element:
     for e in root.iter():
@@ -145,7 +160,10 @@ def fetch_openweather(lat: float, lon: float) -> dict:
 
 def build_weather_output(asset_meta: Dict[str, Any], lat: float, lon: float, weather_raw: dict) -> dict:
     out: Dict[str, Any] = {}
-    for k in ("asset_name", "asset_model", "asset_mfg_year", "asset_registration", "site_id", "group_id", "image", "battery", "charging_status", "heading_calculation", "speed_calculation", "temperature", "humidity", "battery_voltage", "timestamp"):
+    for k in ("asset_name", "asset_model", "asset_mfg_year", "asset_registration",
+              "site_id", "group_id", "image", "battery", "charging_status",
+              "heading_calculation", "speed_calculation", "temperature", "humidity",
+              "battery_voltage", "timestamp"):
         if k in asset_meta and asset_meta[k] is not None:
             out[k] = asset_meta[k]
     out.setdefault("timestamp", datetime.utcnow().replace(tzinfo=tz.utc).isoformat().replace("+00:00", "Z"))
@@ -161,11 +179,13 @@ class MappingIn(BaseModel):
     name: str
     imei: str
 
+# ---------- App lifecycle ----------
 @app.on_event("startup")
-async def show_routes():
+async def on_start():
     _load_last_pos()
     log.info("Mappings loaded: %s", NAME_TO_IMEI)
 
+# ---------- Ingest from Datagate ----------
 @app.post("/")
 async def receive_datagate(request: Request):
     raw = await request.body()
@@ -191,8 +211,9 @@ async def receive_datagate(request: Request):
         gps_valid = (get("GPS/Valid") or "").lower() == "true"
         lat = to_float(get("GPS/Latitude"))
         lon = to_float(get("GPS/Longitude"))
-        sp_mph = to_float(get("Telemetry/Speed"))
+        sp_raw = to_float(get("Telemetry/Speed"))
         heading = to_float(get("Telemetry/Heading"))
+
         # extras
         sats_txt = get("GPS/Satellites") or get("Telemetry/Satellites")
         alt_txt = get("GPS/Altitude") or get("Telemetry/Altitude")
@@ -217,7 +238,7 @@ async def receive_datagate(request: Request):
         # update cache last position
         if lat is not None and lon is not None:
             key = norm_name(name) or name.strip().casefold()
-            kph = mph_to_kph(sp_mph) if sp_mph is not None else None
+            kph = convert_speed(sp_raw) if sp_raw is not None else None
             heading_deg: Optional[int] = None
             if heading is not None:
                 try:
@@ -250,7 +271,7 @@ async def receive_datagate(request: Request):
             log.warning("[SKIP FORWARD] missing lat/lon for '%s'", name)
             continue
 
-        kph_val = mph_to_kph(sp_mph)
+        kph_val = convert_speed(sp_raw)
         heading_deg2 = None
         if heading is not None:
             try:
@@ -294,6 +315,7 @@ async def receive_datagate(request: Request):
 
     return Response(content=f"OK ({sent})", media_type="text/plain")
 
+# ---------- Weather endpoint ----------
 @app.get("/asset/{asset_name}/weather")
 def asset_last_weather(asset_name: str):
     key = norm_name(asset_name)
@@ -310,6 +332,7 @@ def asset_last_weather(asset_name: str):
     wx = fetch_openweather(lat, lon)
     return build_weather_output(asset_meta, lat, lon, wx)
 
+# ---------- Admin / misc ----------
 @app.get("/lastpos")
 def list_last_positions():
     return LAST_POS

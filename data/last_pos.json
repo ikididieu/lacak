@@ -1,25 +1,27 @@
 {
   "sinar mataram": {
     "asset_name": "Sinar Mataram",
-    "lat": 3.92665,
-    "lon": 98.7496,
-    "rx_time": "2025-10-21T04:36:58Z",
-    "gps_valid": true
+    "lat": 3.79088,
+    "lon": 98.71045,
+    "rx_time": "2025-10-21T09:06:54Z",
+    "gps_valid": true,
+    "speed_calculation": 0.0,
+    "heading_calculation": 345
   },
   "sinar kuta starlink": {
     "asset_name": "Sinar Kuta Starlink",
-    "lat": -0.97749,
-    "lon": 123.45215,
-    "rx_time": "2025-10-21T08:21:57Z",
+    "lat": -1.22984,
+    "lon": 122.78234,
+    "rx_time": "2025-10-21T13:30:19Z",
     "gps_valid": true,
     "speed_calculation": null,
-    "heading_calculation": 230
+    "heading_calculation": 199
   },
   "amanah morowali": {
     "asset_name": "Amanah Morowali",
     "lat": 0.3445,
     "lon": 127.93279,
-    "rx_time": "2025-10-21T08:21:57Z",
+    "rx_time": "2025-10-21T13:52:48Z",
     "gps_valid": true,
     "speed_calculation": null,
     "heading_calculation": 260
