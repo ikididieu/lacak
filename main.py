@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 import requests, json, os, threading, logging, math
 from typing import Dict, Optional, Tuple, Any
 from datetime import datetime, timezone as tz
-
+import math
 # ================== CONFIG ==================
 NGP_URL = "http://ngp-tracker.eu.navixy.com:80"   # endpoint NGP
 TIMEOUT_S = 10
@@ -67,17 +67,16 @@ def to_float(txt: Optional[str]) -> Optional[float]:
         return None
 
 def convert_speed(v: Optional[float]) -> Optional[int]:
-    """Konversi ke km/h sesuai SPEED_UNIT."""
+    """Konversi ke km/h dan hasilnya dibulatkan ke bawah (floor)."""
     if v is None:
         return None
     if SPEED_UNIT == "kmh":
-        return int(round(v))
+        return int(math.floor(v))
     if SPEED_UNIT == "mph":
-        return int(round(v * 1.609344))
+        return int(math.floor(v * 1.609344))
     if SPEED_UNIT == "knots":
-        return int(round(v * 1.852))
-    # fallback
-    return int(round(v))
+        return int(math.floor(v * 1.852))
+    return int(math.floor(v))
 
 def strip_ns(root: ET.Element) -> ET.Element:
     for e in root.iter():
