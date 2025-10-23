@@ -1,29 +1,35 @@
 {
   "sinar mataram": {
     "asset_name": "Sinar Mataram",
-    "lat": 3.79088,
-    "lon": 98.71045,
-    "rx_time": "2025-10-21T09:06:54Z",
+    "lat": 1.75738,
+    "lon": 102.39835,
+    "rx_time": "2025-10-23T06:07:00Z",
     "gps_valid": true,
-    "speed_calculation": 0.0,
-    "heading_calculation": 345
+    "speed_kmh": 19.0,
+    "speed_knots": 10.4,
+    "heading_calculation": 116,
+    "raw_snapshot_path": "data\\raw_by_asset\\sinar_mataram.json"
   },
   "sinar kuta starlink": {
     "asset_name": "Sinar Kuta Starlink",
-    "lat": -1.22984,
-    "lon": 122.78234,
-    "rx_time": "2025-10-21T13:30:19Z",
+    "lat": -2.75091,
+    "lon": 122.11095,
+    "rx_time": "2025-10-23T05:55:26Z",
     "gps_valid": true,
-    "speed_calculation": null,
-    "heading_calculation": 199
+    "speed_kmh": null,
+    "speed_knots": null,
+    "heading_calculation": 199,
+    "raw_snapshot_path": "data\\raw_by_asset\\sinar_kuta_starlink.json"
   },
   "amanah morowali": {
     "asset_name": "Amanah Morowali",
-    "lat": 0.3445,
-    "lon": 127.93279,
-    "rx_time": "2025-10-21T13:52:48Z",
+    "lat": 0.4993,
+    "lon": 127.98834,
+    "rx_time": "2025-10-23T05:55:26Z",
     "gps_valid": true,
-    "speed_calculation": null,
-    "heading_calculation": 260
+    "speed_kmh": null,
+    "speed_knots": null,
+    "heading_calculation": 20,
+    "raw_snapshot_path": "data\\raw_by_asset\\amanah_morowali.json"
   }
 }

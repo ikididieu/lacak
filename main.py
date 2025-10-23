@@ -2,37 +2,45 @@
 # -*- coding: utf-8 -*-
 
 """
-Datagate → NGP forwarder + OpenWeather enrichment
-- Match unit by AssetDescription → IMEI (mappings JSON)
-- Cache last position per asset (JSON)
-- /asset/{asset_name}/weather: balikin blok OpenWeather + meta terakhir
-- Speed dikonversi ke km/h sesuai SPEED_UNIT: "kmh" | "mph" | "knots"
-- Heading dipastikan 0–359°
+Datagate → NGP forwarder + OpenWeather + RAW XML→JSON recorder
+Units policy:
+- Canonical internal: m/s
+- Tracsat: kph (hanya referensi)
+- NGP payload: km/h (int, floor)
+- /asset/{name}/weather: speed_calculation = knots (float, 3 desimal, dari LAST_POS.speed_kmh)
 
-CATATAN:
-- ADMIN_TOKEN & OPENWEATHER_API_KEY diset di bawah untuk keperluan internal.
+Fitur:
+- Baca <Telemetry><Speed units="...">, normalisasi ke m/s, turunkan ke km/h & knots
+- Rekam event: JSONL harian + snapshot per-asset
+- Cache last position berisi kmh (int floor) + knots (floor 0.1) untuk kompatibilitas
+- /weather mengambil km/h terakhir dari LAST_POS, lalu konversi → knots (3 desimal) sebagai speed_calculation
 """
 
 from fastapi import FastAPI, Request, Response, HTTPException, Depends, Header
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import xml.etree.ElementTree as ET
 import requests, json, os, threading, logging, math
 from typing import Dict, Optional, Tuple, Any
 from datetime import datetime, timezone as tz
-import math
+from pathlib import Path
+
 # ================== CONFIG ==================
 NGP_URL = "http://ngp-tracker.eu.navixy.com:80"   # endpoint NGP
 TIMEOUT_S = 10
 
-# Sumber data speed dari payload (Telemetry/Speed) pakai unit apa?
-# Pilih: "kmh" | "mph" | "knots"
-SPEED_UNIT = "knots"
+# Fallback jika atribut units tidak ada di XML
+# Pilih: "kmh" | "mph" | "knots" | "mps"
+SPEED_UNIT_FALLBACK = "kmh"
 
-DATA_DIR = "data"
-os.makedirs(DATA_DIR, exist_ok=True)
+DATA_DIR = Path("data")
+EVENTS_DIR = DATA_DIR / "events"           # JSONL harian
+RAW_BY_ASSET_DIR = DATA_DIR / "raw_by_asset"
+for p in (DATA_DIR, EVENTS_DIR, RAW_BY_ASSET_DIR):
+    p.mkdir(parents=True, exist_ok=True)
 
-MAPPINGS_FILE = os.path.join(DATA_DIR, "name_to_imei.json")
-LAST_POS_FILE = os.path.join(DATA_DIR, "last_pos.json")
+MAPPINGS_FILE = DATA_DIR / "name_to_imei.json"
+LAST_POS_FILE = DATA_DIR / "last_pos.json"
 
 DEFAULT_MAPPINGS = {
     # "Sinar Mataram": "8140018210000",
@@ -49,12 +57,15 @@ OPENWEATHER_TIMEOUT_S = 10
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 log = logging.getLogger("datagate-ngp")
 
-app = FastAPI(title="Datagate→NGP + Weather (match by AssetDescription)")
+app = FastAPI(title="Datagate→NGP + Weather + RAW recorder (kmh for NGP, knots for weather)")
 _lock = threading.Lock()
 NAME_TO_IMEI: Dict[str, str] = {}
 LAST_POS: Dict[str, Dict[str, Any]] = {}
 
 # ---------- Utils ----------
+def now_utc_iso() -> str:
+    return datetime.utcnow().replace(tzinfo=tz.utc).isoformat().replace("+00:00", "Z")
+
 def norm_name(s: Optional[str]) -> Optional[str]:
     return s.strip().casefold() if s else None
 
@@ -66,23 +77,70 @@ def to_float(txt: Optional[str]) -> Optional[float]:
     except Exception:
         return None
 
-def convert_speed(v: Optional[float]) -> Optional[int]:
-    """Konversi ke km/h dan hasilnya dibulatkan ke bawah (floor)."""
+def normalize_unit(unit: Optional[str]) -> str:
+    if not unit:
+        return "kmh"
+    u = unit.strip().lower()
+    if u in {"kmh", "kph", "km/h"}: return "kmh"
+    if u in {"mph", "mi/h"}:        return "mph"
+    if u in {"knots", "knot", "kt", "kts"}: return "knots"
+    if u in {"m/s", "mps", "ms"}:   return "mps"
+    return "kmh"
+
+# ---- conversions with canonical m/s ----
+def any_to_mps(v: Optional[float], unit: str) -> Optional[float]:
+    """Convert incoming speed to meters per second."""
     if v is None:
         return None
-    if SPEED_UNIT == "kmh":
-        return int(math.floor(v))
-    if SPEED_UNIT == "mph":
-        return int(math.floor(v * 1.609344))
-    if SPEED_UNIT == "knots":
-        return int(math.floor(v * 1.852))
-    return int(math.floor(v))
+    u = normalize_unit(unit)
+    if u == "kmh":
+        return v / 3.6
+    if u == "mph":
+        return v * 0.44704
+    if u == "knots":
+        return v * 0.514444
+    if u == "mps":
+        return v
+    return v / 3.6  # default assume km/h
+
+def mps_to_kmh(v_mps: Optional[float]) -> Optional[float]:
+    return None if v_mps is None else (v_mps * 3.6)
+
+def mps_to_knots(v_mps: Optional[float]) -> Optional[float]:
+    return None if v_mps is None else (v_mps * 1.943844)
 
 def strip_ns(root: ET.Element) -> ET.Element:
     for e in root.iter():
         if "}" in e.tag:
             e.tag = e.tag.split("}", 1)[1]
     return root
+
+def element_to_dict(el: ET.Element) -> Any:
+    """Konversi element XML (AssetEvent) → dict (rekursif)."""
+    node: Dict[str, Any] = {}
+    if el.attrib:
+        node["@attr"] = {k: v for k, v in el.attrib.items()}
+    children = list(el)
+    if children:
+        d: Dict[str, Any] = {}
+        for c in children:
+            key = c.tag
+            val = element_to_dict(c)
+            if key in d:
+                if not isinstance(d[key], list):
+                    d[key] = [d[key]]
+                d[key].append(val)
+            else:
+                d[key] = val
+        if el.text and el.text.strip():
+            node["#text"] = el.text.strip()
+        node.update(d)
+    else:
+        text = (el.text or "").strip()
+        node = text
+        if el.attrib:
+            node = {"@attr": {k: v for k, v in el.attrib.items()}, "#text": text}
+    return node
 
 def round6(v: Optional[float]) -> Optional[float]:
     return float(f"{v:.6f}") if (v is not None and not math.isnan(v)) else None
@@ -94,7 +152,7 @@ def save_mappings(m: Dict[str, str]) -> None:
             json.dump(m, f, indent=2, ensure_ascii=False)
 
 def load_mappings() -> Dict[str, str]:
-    if os.path.exists(MAPPINGS_FILE):
+    if MAPPINGS_FILE.exists():
         try:
             with open(MAPPINGS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -115,7 +173,7 @@ def _save_last_pos() -> None:
 
 def _load_last_pos() -> None:
     global LAST_POS
-    if os.path.exists(LAST_POS_FILE):
+    if LAST_POS_FILE.exists():
         try:
             with open(LAST_POS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -158,6 +216,11 @@ def fetch_openweather(lat: float, lon: float) -> dict:
         raise HTTPException(status_code=502, detail=f"OpenWeather failed: {e}")
 
 def build_weather_output(asset_meta: Dict[str, Any], lat: float, lon: float, weather_raw: dict) -> dict:
+    """
+    Output /weather:
+    - speed_calculation = knots (float, 3 desimal)
+    - tidak expose speed_kmh/speed_knots
+    """
     out: Dict[str, Any] = {}
     for k in ("asset_name", "asset_model", "asset_mfg_year", "asset_registration",
               "site_id", "group_id", "image", "battery", "charging_status",
@@ -165,13 +228,17 @@ def build_weather_output(asset_meta: Dict[str, Any], lat: float, lon: float, wea
               "battery_voltage", "timestamp"):
         if k in asset_meta and asset_meta[k] is not None:
             out[k] = asset_meta[k]
-    out.setdefault("timestamp", datetime.utcnow().replace(tzinfo=tz.utc).isoformat().replace("+00:00", "Z"))
+    out.setdefault("timestamp", now_utc_iso())
     out["latitude"] = round6(lat)
     out["longitude"] = round6(lon)
     out["coord"] = {"lon": float(f"{lon:.4f}"), "lat": float(f"{lat:.4f}")}
+
     for key in ("weather", "base", "main", "visibility", "wind", "clouds", "dt", "sys", "timezone", "id", "name", "cod"):
         if key in weather_raw:
             out[key] = weather_raw[key]
+
+    # Optional: expose kecepatan angin dari OpenWeather (m/s)
+    out["wind_speed_ms"] = weather_raw.get("wind", {}).get("speed", None)
     return out
 
 class MappingIn(BaseModel):
@@ -210,10 +277,16 @@ async def receive_datagate(request: Request):
         gps_valid = (get("GPS/Valid") or "").lower() == "true"
         lat = to_float(get("GPS/Latitude"))
         lon = to_float(get("GPS/Longitude"))
-        sp_raw = to_float(get("Telemetry/Speed"))
+
+        # --- Speed & heading ---
+        sp_el = ev.find("Telemetry/Speed")
+        sp_raw = to_float(sp_el.text if (sp_el is not None and sp_el.text) else None)
+        sp_unit_attr = sp_el.get("units") if sp_el is not None else None
+        sp_unit_in = normalize_unit(sp_unit_attr or SPEED_UNIT_FALLBACK)
+
         heading = to_float(get("Telemetry/Heading"))
 
-        # extras
+        # --- extras ---
         sats_txt = get("GPS/Satellites") or get("Telemetry/Satellites")
         alt_txt = get("GPS/Altitude") or get("Telemetry/Altitude")
         battery_txt = get("Telemetry/BatteryLevel") or get("Telemetry/Battery") or get("Telemetry/ExtBattery")
@@ -234,31 +307,74 @@ async def receive_datagate(request: Request):
             log.warning("[SKIP] missing AssetDescription")
             continue
 
-        # update cache last position
-        if lat is not None and lon is not None:
-            key = norm_name(name) or name.strip().casefold()
-            kph = convert_speed(sp_raw) if sp_raw is not None else None
-            heading_deg: Optional[int] = None
-            if heading is not None:
-                try:
-                    heading_deg = int(round(heading)) % 360
-                except Exception:
-                    heading_deg = None
+        # --- derive via canonical m/s ---
+        v_mps = any_to_mps(sp_raw, sp_unit_in) if sp_raw is not None else None
+        kmh_val = mps_to_kmh(v_mps)    # float
+        knots_val = mps_to_knots(v_mps)  # float
 
-            LAST_POS[key] = {
+        # policies:
+        kmh_int_floor = int(math.floor(kmh_val)) if kmh_val is not None else None   # for NGP & cache
+        knots_1dp_floor = (math.floor(knots_val * 10) / 10.0) if knots_val is not None else None  # legacy cache
+
+        heading_deg = int(round(heading)) % 360 if heading is not None else None
+        key_norm = norm_name(name) or name.strip().casefold()
+
+        # --- record RAW JSON ---
+        raw_dict = element_to_dict(ev)
+        day_file = EVENTS_DIR / (datetime.utcnow().strftime("%Y-%m-%d") + ".jsonl")
+        record = {
+            "ts_ingest": now_utc_iso(),
+            "asset_name": name,
+            "imei": None,  # diisi setelah mapping ditemukan
+            "message_time": rx_time or gmt_time,
+            "gps_valid": bool(gps_valid),
+            "speed": {
+                "input": {"value": sp_raw, "units": sp_unit_attr or SPEED_UNIT_FALLBACK},
+                "mps": v_mps,
+                "kmh_floor": kmh_int_floor,
+                "knots_floor_1dp": knots_1dp_floor
+            },
+            "location": {
+                "lat": lat, "lon": lon, "alt": alt, "sats": sats,
+                "heading": heading_deg
+            },
+            "raw": raw_dict,
+        }
+        try:
+            with open(day_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except Exception as e:
+            log.warning("failed to write daily jsonl: %s", e)
+
+        # snapshot per-asset
+        snap_path = None
+        try:
+            snap_path = RAW_BY_ASSET_DIR / (key_norm.replace(" ", "_") + ".json")
+            with open(snap_path, "w", encoding="utf-8") as f:
+                json.dump(record, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            log.warning("failed to write per-asset snapshot: %s", e)
+            snap_path = None
+
+        # --- update cache last position (store both) ---
+        if lat is not None and lon is not None:
+            LAST_POS[key_norm] = {
                 "asset_name": name,
                 "lat": lat,
                 "lon": lon,
-                "rx_time": rx_time or gmt_time or datetime.utcnow().replace(tzinfo=tz.utc).isoformat().replace("+00:00", "Z"),
+                "rx_time": rx_time or gmt_time or now_utc_iso(),
                 "gps_valid": bool(gps_valid),
-                "speed_calculation": float(kph) if kph is not None else None,
+                # Sumber kebenaran untuk /weather (kph int)
+                "speed_kmh": float(kmh_int_floor) if kmh_int_floor is not None else None,
+                # Legacy simpan knots 0.1dp (tidak dipakai weather, hanya fallback)
+                "speed_knots": float(knots_1dp_floor) if knots_1dp_floor is not None else None,
                 "heading_calculation": heading_deg,
+                "raw_snapshot_path": str(snap_path) if snap_path else None,
             }
             _save_last_pos()
 
-        # forward ke NGP jika ada mapping
+        # --- forward ke NGP (km/h int floor) jika ada mapping ---
         imei = None
-        key_norm = norm_name(name)
         for display, val in NAME_TO_IMEI.items():
             if norm_name(display) == key_norm:
                 imei = val.strip()
@@ -270,13 +386,13 @@ async def receive_datagate(request: Request):
             log.warning("[SKIP FORWARD] missing lat/lon for '%s'", name)
             continue
 
-        kph_val = convert_speed(sp_raw)
-        heading_deg2 = None
-        if heading is not None:
-            try:
-                heading_deg2 = int(round(heading)) % 360
-            except Exception:
-                heading_deg2 = None
+        # tulis update IMEI kecil ke JSONL
+        record["imei"] = imei
+        try:
+            with open(day_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"_update": "imei", "asset_name": name, "imei": imei, "ts": now_utc_iso()}, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
 
         location: Dict[str, Any] = {
             "gnss_time": gmt_time or rx_time,
@@ -288,14 +404,14 @@ async def receive_datagate(request: Request):
             location["satellites"] = sats
         if alt is not None:
             location["altitude"] = alt
-        if kph_val is not None:
-            location["speed"] = kph_val
-        if heading_deg2 is not None:
-            location["heading"] = heading_deg2
+        if kmh_int_floor is not None:
+            location["speed"] = kmh_int_floor   # <-- NGP expects km/h
+        if heading_deg is not None:
+            location["heading"] = heading_deg
 
         payload: Dict[str, Any] = {
             "device_id": imei,
-            "message_time": rx_time or datetime.utcnow().replace(tzinfo=tz.utc).isoformat().replace("+00:00", "Z"),
+            "message_time": rx_time or now_utc_iso(),
             "location": location,
         }
         if battery_level is not None:
@@ -307,14 +423,16 @@ async def receive_datagate(request: Request):
             pass
 
         ok, info = post_ngp(payload)
-        log.info("[FORWARD] %s | name=%s | imei=%s | info=%s",
-                 "OK" if ok else "FAIL", name, imei, info)
+        log.info("[FORWARD] %s | name=%s | imei=%s | src_unit=%s | kmh=%s | knots=%.1f | info=%s",
+                 "OK" if ok else "FAIL", name, imei, sp_unit_in,
+                 str(kmh_int_floor) if kmh_int_floor is not None else "None",
+                 knots_1dp_floor if knots_1dp_floor is not None else -1.0, info)
         if ok:
             sent += 1
 
     return Response(content=f"OK ({sent})", media_type="text/plain")
 
-# ---------- Weather endpoint ----------
+# ---------- Weather endpoint (return speed_calculation in knots) ----------
 @app.get("/asset/{asset_name}/weather")
 def asset_last_weather(asset_name: str):
     key = norm_name(asset_name)
@@ -322,14 +440,62 @@ def asset_last_weather(asset_name: str):
     if not rec:
         raise HTTPException(status_code=404, detail=f"no last position for asset '{asset_name}'")
     lat, lon = float(rec["lat"]), float(rec["lon"])
+
+    # Ambil km/h dari cache (sumber utama)
+    kph = rec.get("speed_kmh")
+    speed_calc_knots: Optional[float] = None
+    if kph is not None:
+        # Konversi dari km/h int → knots (3 desimal) contoh 22 → 11.879
+        speed_calc_knots = round(float(kph) / 1.852, 3)
+    else:
+        # Fallback: jika entri lama belum punya kmh, pakai speed_knots (legacy)
+        legacy_knots = rec.get("speed_knots")
+        if legacy_knots is not None:
+            speed_calc_knots = float(legacy_knots)
+        else:
+            speed_calc_knots = 0.0
+
     asset_meta = {
         "asset_name": rec.get("asset_name"),
         "timestamp": rec.get("rx_time"),
-        "speed_calculation": rec.get("speed_calculation"),
         "heading_calculation": rec.get("heading_calculation"),
+        # Hanya expose speed_calculation (knots)
+        "speed_calculation": speed_calc_knots,
     }
     wx = fetch_openweather(lat, lon)
     return build_weather_output(asset_meta, lat, lon, wx)
+
+# ---------- Debug endpoint ----------
+@app.get("/asset/{asset_name}/debug")
+def asset_debug(asset_name: str):
+    key = (asset_name or "").strip().casefold()
+    rec = LAST_POS.get(key)
+    if not rec:
+        raise HTTPException(status_code=404, detail="no last position")
+    raw_path = rec.get("raw_snapshot_path")
+    raw = None
+    if raw_path and os.path.exists(raw_path):
+        try:
+            with open(raw_path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+        except Exception:
+            raw = {"error": "failed to read snapshot"}
+    return JSONResponse({
+        "asset_name": rec.get("asset_name"),
+        "rx_time": rec.get("rx_time"),
+        "speed_kmh_cached": rec.get("speed_kmh"),
+        "speed_knots_cached": rec.get("speed_knots"),
+        "heading_deg": rec.get("heading_calculation"),
+        "gps_valid": rec.get("gps_valid"),
+        "raw_snapshot_path": raw_path,
+        "input_speed_from_snapshot": (raw or {}).get("speed", {}).get("input"),
+        "calc_from_snapshot": {
+            "mps": (raw or {}).get("speed", {}).get("mps"),
+            "kmh_floor": (raw or {}).get("speed", {}).get("kmh_floor"),
+            "knots_floor_1dp": (raw or {}).get("speed", {}).get("knots_floor_1dp"),
+        },
+        "location_from_snapshot": (raw or {}).get("location"),
+    })
 
 # ---------- Admin / misc ----------
 @app.get("/lastpos")
@@ -340,10 +506,16 @@ def list_last_positions():
 def list_mappings():
     return NAME_TO_IMEI
 
+class MappingIn(BaseModel):
+    name: str
+    imei: str
+
 @app.post("/mappings", status_code=201)
 def add_mapping(m: MappingIn, admin: None = Depends(require_admin)):
     NAME_TO_IMEI[m.name] = m.imei
-    save_mappings(NAME_TO_IMEI)
+    with _lock:
+        with open(MAPPINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(NAME_TO_IMEI, f, indent=2, ensure_ascii=False)
     return {"ok": True, "mappings": NAME_TO_IMEI}
 
 @app.get("/health")

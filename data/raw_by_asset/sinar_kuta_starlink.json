@@ -1,0 +1,57 @@
+{
+  "ts_ingest": "2025-10-23T05:55:24.773421Z",
+  "asset_name": "Sinar Kuta Starlink",
+  "imei": null,
+  "message_time": "2025-10-23T05:55:26Z",
+  "gps_valid": true,
+  "speed": {
+    "input": {
+      "value": null,
+      "units": "kmh"
+    },
+    "mps": null,
+    "kmh_floor": null,
+    "knots_floor_1dp": null
+  },
+  "location": {
+    "lat": -2.75091,
+    "lon": 122.11095,
+    "alt": null,
+    "sats": null,
+    "heading": 199
+  },
+  "raw": {
+    "@attr": {
+      "objectID": "8145141260000-527"
+    },
+    "AssetDescription": "Sinar Kuta Starlink",
+    "AssetID": "527",
+    "RXTime": "2025-10-23T05:55:26Z",
+    "GMTTime": "2025-10-23T05:49:16Z",
+    "Network": "45",
+    "Priority": "normal",
+    "GPS": {
+      "Valid": "true",
+      "Latitude": "-2.75091",
+      "Longitude": "122.11095"
+    },
+    "Telemetry": {
+      "Heading": "199"
+    },
+    "Event": {
+      "Number": "-1"
+    },
+    "Odometer": {
+      "@attr": {
+        "units": "miles"
+      },
+      "#text": "36410.4"
+    },
+    "Hourmeter": {
+      "@attr": {
+        "units": "hours"
+      },
+      "#text": "0.0"
+    }
+  }
+}
