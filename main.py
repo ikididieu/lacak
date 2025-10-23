@@ -26,7 +26,7 @@ TIMEOUT_S = 10
 
 # Sumber data speed dari payload (Telemetry/Speed) pakai unit apa?
 # Pilih: "kmh" | "mph" | "knots"
-SPEED_UNIT = "kmh"
+SPEED_UNIT = "knots"
 
 DATA_DIR = "data"
 os.makedirs(DATA_DIR, exist_ok=True)
