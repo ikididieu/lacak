@@ -1,8 +1,8 @@
 {
-  "ts_ingest": "2025-10-23T05:55:24.781711Z",
+  "ts_ingest": "2025-10-23T12:24:28.610804Z",
   "asset_name": "Amanah Morowali",
   "imei": null,
-  "message_time": "2025-10-23T05:55:26Z",
+  "message_time": "2025-10-23T12:24:28Z",
   "gps_valid": true,
   "speed": {
     "input": {
@@ -22,12 +22,12 @@
   },
   "raw": {
     "@attr": {
-      "objectID": "8145141260001-528"
+      "objectID": "8145374680002-528"
     },
     "AssetDescription": "Amanah Morowali",
     "AssetID": "528",
-    "RXTime": "2025-10-23T05:55:26Z",
-    "GMTTime": "2025-10-23T05:49:16Z",
+    "RXTime": "2025-10-23T12:24:28Z",
+    "GMTTime": "2025-10-23T12:19:16Z",
     "Network": "45",
     "Priority": "normal",
     "GPS": {

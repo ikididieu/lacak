@@ -222,10 +222,7 @@ def build_weather_output(asset_meta: Dict[str, Any], lat: float, lon: float, wea
     - tidak expose speed_kmh/speed_knots
     """
     out: Dict[str, Any] = {}
-    for k in ("asset_name", "asset_model", "asset_mfg_year", "asset_registration",
-              "site_id", "group_id", "image", "battery", "charging_status",
-              "heading_calculation", "speed_calculation", "temperature", "humidity",
-              "battery_voltage", "timestamp"):
+    for k in ("asset_name", "asset_model", "asset_mfg_year", "asset_registration","site_id", "group_id", "image", "battery", "charging_status","heading_calculation", "speed_calculation", "temperature", "humidity", "battery_voltage", "timestamp"):
         if k in asset_meta and asset_meta[k] is not None:
             out[k] = asset_meta[k]
     out.setdefault("timestamp", now_utc_iso())
@@ -432,38 +429,36 @@ async def receive_datagate(request: Request):
 
     return Response(content=f"OK ({sent})", media_type="text/plain")
 
-# ---------- Weather endpoint (return speed_calculation in knots) ----------
+# ---------- Weather endpoint (return speed_calculation = LAST_POS.speed_knots, no conversion) ----------
 @app.get("/asset/{asset_name}/weather")
 def asset_last_weather(asset_name: str):
     key = norm_name(asset_name)
     rec = LAST_POS.get(key)
     if not rec:
         raise HTTPException(status_code=404, detail=f"no last position for asset '{asset_name}'")
+
     lat, lon = float(rec["lat"]), float(rec["lon"])
 
-    # Ambil km/h dari cache (sumber utama)
-    kph = rec.get("speed_kmh")
-    speed_calc_knots: Optional[float] = None
-    if kph is not None:
-        # Konversi dari km/h int → knots (3 desimal) contoh 22 → 11.879
-        speed_calc_knots = round(float(kph) / 1.852, 3)
-    else:
-        # Fallback: jika entri lama belum punya kmh, pakai speed_knots (legacy)
-        legacy_knots = rec.get("speed_knots")
-        if legacy_knots is not None:
-            speed_calc_knots = float(legacy_knots)
-        else:
-            speed_calc_knots = 0.0
+    # Ambil langsung dari cache (tanpa konversi dari km/h)
+    # Jika tidak ada (record lama), default 0.0
+    speed_knots = rec.get("speed_knots")
+    try:
+        # pastikan float; biarkan presisi apa adanya (mis. 11.2)
+        speed_calc_knots = float(speed_knots) if speed_knots is not None else 0.0
+    except Exception:
+        speed_calc_knots = 0.0
 
     asset_meta = {
         "asset_name": rec.get("asset_name"),
         "timestamp": rec.get("rx_time"),
         "heading_calculation": rec.get("heading_calculation"),
-        # Hanya expose speed_calculation (knots)
+        # Hanya expose speed_calculation (knots), taken as-is from LAST_POS
         "speed_calculation": speed_calc_knots,
     }
+
     wx = fetch_openweather(lat, lon)
     return build_weather_output(asset_meta, lat, lon, wx)
+
 
 # ---------- Debug endpoint ----------
 @app.get("/asset/{asset_name}/debug")

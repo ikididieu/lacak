@@ -1,8 +1,8 @@
 {
-  "ts_ingest": "2025-10-23T05:55:24.773421Z",
+  "ts_ingest": "2025-10-23T12:24:28.607888Z",
   "asset_name": "Sinar Kuta Starlink",
   "imei": null,
-  "message_time": "2025-10-23T05:55:26Z",
+  "message_time": "2025-10-23T12:24:28Z",
   "gps_valid": true,
   "speed": {
     "input": {
@@ -22,12 +22,12 @@
   },
   "raw": {
     "@attr": {
-      "objectID": "8145141260000-527"
+      "objectID": "8145374680001-527"
     },
     "AssetDescription": "Sinar Kuta Starlink",
     "AssetID": "527",
-    "RXTime": "2025-10-23T05:55:26Z",
-    "GMTTime": "2025-10-23T05:49:16Z",
+    "RXTime": "2025-10-23T12:24:28Z",
+    "GMTTime": "2025-10-23T12:19:16Z",
     "Network": "45",
     "Priority": "normal",
     "GPS": {
