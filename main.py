@@ -406,13 +406,24 @@ async def receive_datagate(request: Request):
         if heading_deg is not None:
             location["heading"] = heading_deg
 
+        # Format payload sesuai NGP curl example
         payload: Dict[str, Any] = {
-            "device_id": imei,
             "message_time": rx_time or now_utc_iso(),
-            "location": location,
+            "device_id": imei,
+            "location": {
+                "gnss_time": gmt_time or rx_time or now_utc_iso(),
+                "fix_type": "HAS_FIX" if gps_valid else "NO_FIX",
+                "satellites": sats if sats is not None else 0,
+                "latitude": round6(lat),
+                "longitude": round6(lon),
+                "altitude": alt if alt is not None else 0,
+                "speed": kmh_int_floor if kmh_int_floor is not None else 0,
+                "heading": heading_deg if heading_deg is not None else 0
+            },
+            "battery_level": battery_level if battery_level is not None else 0
         }
-        if battery_level is not None:
-            payload["battery_level"] = battery_level
+
+
 
         try:
             log.info("[NGP-PAYLOAD] %s", json.dumps(payload)[:800])
