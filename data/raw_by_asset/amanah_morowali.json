@@ -1,42 +1,40 @@
 {
-  "ts_ingest": "2025-10-23T12:24:28.610804Z",
+  "ts_ingest": "2025-11-06T08:27:43.666528Z",
   "asset_name": "Amanah Morowali",
   "imei": null,
-  "message_time": "2025-10-23T12:24:28Z",
+  "message_time": "2025-11-06T08:27:43Z",
   "gps_valid": true,
   "speed": {
     "input": {
       "value": null,
       "units": "kmh"
     },
-    "mps": null,
-    "kmh_floor": null,
-    "knots_floor_1dp": null
+    "kmh_floor": null
   },
   "location": {
-    "lat": 0.4993,
-    "lon": 127.98834,
+    "lat": 0.3445,
+    "lon": 127.93279,
     "alt": null,
     "sats": null,
-    "heading": 20
+    "heading": 321
   },
   "raw": {
     "@attr": {
-      "objectID": "8145374680002-528"
+      "objectID": "8157328630000-528"
     },
     "AssetDescription": "Amanah Morowali",
     "AssetID": "528",
-    "RXTime": "2025-10-23T12:24:28Z",
-    "GMTTime": "2025-10-23T12:19:16Z",
+    "RXTime": "2025-11-06T08:27:43Z",
+    "GMTTime": "2025-11-06T08:18:52Z",
     "Network": "45",
     "Priority": "normal",
     "GPS": {
       "Valid": "true",
-      "Latitude": "0.49930",
-      "Longitude": "127.98834"
+      "Latitude": "0.34450",
+      "Longitude": "127.93279"
     },
     "Telemetry": {
-      "Heading": "20"
+      "Heading": "321"
     },
     "Event": {
       "Number": "-1"
@@ -45,7 +43,7 @@
       "@attr": {
         "units": "miles"
       },
-      "#text": "21894.8"
+      "#text": "24222.4"
     },
     "Hourmeter": {
       "@attr": {

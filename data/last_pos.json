@@ -1,35 +1,44 @@
 {
   "sinar mataram": {
     "asset_name": "Sinar Mataram",
-    "lat": 1.22015,
-    "lon": 103.32148,
-    "rx_time": "2025-10-23T12:06:57Z",
+    "lat": -6.77097,
+    "lon": 113.1958,
+    "rx_time": "2025-11-07T04:06:53Z",
     "gps_valid": true,
-    "speed_kmh": 20.0,
-    "speed_knots": 11.2,
-    "heading_calculation": 101,
+    "sats": 8,
+    "speed_kmh": 19.0,
+    "heading": 275,
     "raw_snapshot_path": "data\\raw_by_asset\\sinar_mataram.json"
   },
   "sinar kuta starlink": {
     "asset_name": "Sinar Kuta Starlink",
-    "lat": -2.75091,
-    "lon": 122.11095,
-    "rx_time": "2025-10-23T12:24:28Z",
+    "lat": 1.16023,
+    "lon": 103.92671,
+    "rx_time": "2025-11-06T09:24:57Z",
     "gps_valid": true,
     "speed_kmh": null,
-    "speed_knots": null,
-    "heading_calculation": 199,
+    "heading": 181,
     "raw_snapshot_path": "data\\raw_by_asset\\sinar_kuta_starlink.json"
   },
   "amanah morowali": {
     "asset_name": "Amanah Morowali",
-    "lat": 0.4993,
-    "lon": 127.98834,
-    "rx_time": "2025-10-23T12:24:28Z",
+    "lat": 0.3445,
+    "lon": 127.93279,
+    "rx_time": "2025-11-06T08:27:43Z",
     "gps_valid": true,
     "speed_kmh": null,
-    "speed_knots": null,
-    "heading_calculation": 20,
+    "heading": 321,
     "raw_snapshot_path": "data\\raw_by_asset\\amanah_morowali.json"
+  },
+  "gsat solar demo 1": {
+    "asset_name": "Gsat Solar Demo 1",
+    "lat": -0.36363,
+    "lon": 101.92163,
+    "rx_time": "2025-11-07T03:52:11Z",
+    "gps_valid": true,
+    "sats": 8,
+    "speed_kmh": null,
+    "heading": 264,
+    "raw_snapshot_path": "data\\raw_by_asset\\gsat_solar_demo_1.json"
   }
 }

@@ -1,48 +1,46 @@
 {
-  "ts_ingest": "2025-10-23T12:06:55.291726Z",
+  "ts_ingest": "2025-11-07T04:06:52.865595Z",
   "asset_name": "Sinar Mataram",
   "imei": null,
-  "message_time": "2025-10-23T12:06:57Z",
+  "message_time": "2025-11-07T04:06:53Z",
   "gps_valid": true,
   "speed": {
     "input": {
-      "value": 13.0,
+      "value": 12.0,
       "units": "mph"
     },
-    "mps": 5.81152,
-    "kmh_floor": 20,
-    "knots_floor_1dp": 11.2
+    "kmh_floor": 19
   },
   "location": {
-    "lat": 1.22015,
-    "lon": 103.32148,
+    "lat": -6.77097,
+    "lon": 113.1958,
     "alt": null,
     "sats": null,
-    "heading": 101
+    "heading": 275
   },
   "raw": {
     "@attr": {
-      "objectID": "8145364170000-58"
+      "objectID": "8158036130000-58"
     },
     "AssetDescription": "Sinar Mataram",
     "AssetID": "58",
-    "RXTime": "2025-10-23T12:06:57Z",
-    "GMTTime": "2025-10-23T12:06:51Z",
+    "RXTime": "2025-11-07T04:06:53Z",
+    "GMTTime": "2025-11-07T04:06:49Z",
     "Network": "6",
     "Priority": "normal",
     "GPS": {
       "Valid": "true",
-      "Latitude": "1.22015",
-      "Longitude": "103.32148"
+      "Latitude": "-6.77097",
+      "Longitude": "113.19580"
     },
     "Telemetry": {
       "Speed": {
         "@attr": {
           "units": "mph"
         },
-        "#text": "13"
+        "#text": "12"
       },
-      "Heading": "101"
+      "Heading": "275"
     },
     "Event": {
       "Number": "-1",
@@ -52,7 +50,7 @@
       "@attr": {
         "units": "miles"
       },
-      "#text": "1383.2"
+      "#text": "3195.3"
     },
     "Hourmeter": {
       "@attr": {

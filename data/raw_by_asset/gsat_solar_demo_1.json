@@ -1,0 +1,68 @@
+{
+  "ts_ingest": "2025-11-07T03:52:11.112025Z",
+  "asset_name": "Gsat Solar Demo 1",
+  "imei": null,
+  "message_time": "2025-11-07T03:52:11Z",
+  "gps_valid": true,
+  "speed": {
+    "input": {
+      "value": null,
+      "units": "kmh"
+    },
+    "kmh_floor": null
+  },
+  "location": {
+    "lat": -0.36363,
+    "lon": 101.92163,
+    "alt": null,
+    "sats": null,
+    "heading": 264
+  },
+  "raw": {
+    "@attr": {
+      "objectID": "8158027310000-786432"
+    },
+    "AssetDescription": "Gsat Solar Demo 1",
+    "AssetID": "786432",
+    "RXTime": "2025-11-07T03:52:11Z",
+    "GMTTime": "2025-11-07T03:52:11Z",
+    "Network": "11",
+    "Priority": "normal",
+    "GPS": {
+      "Valid": "true",
+      "Latitude": "-0.36363",
+      "Longitude": "101.92163"
+    },
+    "Telemetry": {
+      "Heading": "264",
+      "Battery": {
+        "@attr": {
+          "units": "%"
+        },
+        "#text": "88"
+      },
+      "Temperature1": {
+        "@attr": {
+          "units": "C"
+        },
+        "#text": "36.5"
+      }
+    },
+    "Event": {
+      "Number": "-1",
+      "Description": "VeDBA=0 Orientation=X- Charge=Discharging"
+    },
+    "Odometer": {
+      "@attr": {
+        "units": "miles"
+      },
+      "#text": "177.2"
+    },
+    "Hourmeter": {
+      "@attr": {
+        "units": "hours"
+      },
+      "#text": "0.0"
+    }
+  }
+}
